@@ -2,6 +2,7 @@ from typing import Callable, Iterable, Tuple
 
 import torch
 from torch.optim import Optimizer
+import math
 
 
 class AdamW(Optimizer):
@@ -31,6 +32,10 @@ class AdamW(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
+            beta1, beta2 = group['betas']
+            beta1, beta2 = torch.tensor(beta1), torch.tensor(beta2)
+            eps = group["eps"]
+
             for p in group["params"]:
                 if p.grad is None:
                     continue
@@ -38,7 +43,7 @@ class AdamW(Optimizer):
                 if grad.is_sparse:
                     raise RuntimeError("Adam does not support sparse gradients, please consider SparseAdam instead")
 
-                raise NotImplementedError()
+                # todo
 
                 # State should be stored in this dictionary
                 state = self.state[p]
@@ -47,14 +52,36 @@ class AdamW(Optimizer):
                 alpha = group["lr"]
 
                 # Update first and second moments of the gradients
+                # Hermes - see pytorch implementation for further hints
+                # State initialization
+                if not state or len(state) == 0:
+
+                    # Exponential moving average of gradient values
+                    state['moment_one'] = torch.zeros_like(p)
+                    # Exponential moving average of squared gradient values
+                    state['moment_two'] = torch.zeros_like(p)
+                    state["time"] = 0
+
+                else:
+                    state["moment_one"] = (state["moment_one"] * beta1) + (1-beta1) * grad
+                    state["moment_two"] = (state["moment_two"] * beta2) + (1 - beta2) * grad ** 2
+
 
                 # Bias correction
                 # Please note that we are using the "efficient version" given in
                 # https://arxiv.org/abs/1412.6980
+                state["time"] += 1
+                t = state["time"]
+                alpha_t = (alpha * math.sqrt(1 - beta2 ** t)) / (1 - beta1 ** t)
 
                 # Update parameters
 
+                update = state["moment_one"] / (torch.sqrt(state["moment_two"]) + eps)
+                p.data -= ((alpha_t * update) + (alpha * group["weight_decay"] * p.data))
+
                 # Add weight decay after the main gradient-based updates.
                 # Please note that the learning rate should be incorporated into this update.
+                #p.data -= (alpha * group["weight_decay"] * p.data)
+                #p.data.mul_(1 - alpha * group["weight_decay"])
 
         return loss
