@@ -32,9 +32,6 @@ class AdamW(Optimizer):
             loss = closure()
 
         for group in self.param_groups:
-            beta1, beta2 = group['betas']
-            #eta1, beta2 = torch.tensor(beta1), torch.tensor(beta2)
-            eps = group["eps"]
 
             for p in group["params"]:
                 if p.grad is None:
@@ -44,7 +41,7 @@ class AdamW(Optimizer):
                     raise RuntimeError("Adam does not support sparse gradients, please consider SparseAdam instead")
 
                 # todo
-
+                beta1, beta2 = group['betas']
                 # State should be stored in this dictionary
                 state = self.state[p]
 
@@ -54,27 +51,25 @@ class AdamW(Optimizer):
                 # Update first and second moments of the gradients
                 # Hermes - see pytorch implementation for further hints
                 # State initialization
-                if not state or len(state) == 0:
-
+                if len(state) == 0:
                     # Exponential moving average of gradient values
-                    state['moment_one'] = torch.zeros_like(p)
+                    state['moment_one'] = torch.zeros_like(p.data)
                     # Exponential moving average of squared gradient values
-                    state['moment_two'] = torch.zeros_like(p)
+                    state['moment_two'] = torch.zeros_like(p.data)
                     state["time"] = 0
 
-                else:
-                    state["moment_one"] = (state["moment_one"] * beta1) + (1-beta1) * grad
-                    state["moment_two"] = (state["moment_two"] * beta2) + (1 - beta2) * grad ** 2
-
+                state["moment_one"] = (state["moment_one"] * beta1) + grad - grad*beta1
+                state["moment_two"] = (state["moment_two"] * beta2) + grad**2 - grad**2*beta2
 
                 # Bias correction
                 # Please note that we are using the "efficient version" given in
                 # https://arxiv.org/abs/1412.6980
                 state["time"] += 1
-
                 alpha_t = (alpha * math.sqrt(1 - beta2 ** state["time"])) / (1 - beta1 ** state["time"])
+
                 # Update parameters
-                p.data = p.data - ((alpha_t * state["moment_one"] / (state["moment_two"] ** 0.5 + eps)) - (alpha * group["weight_decay"] * p.data))
+                p.data = p.data - (alpha_t * state["moment_one"] / (state["moment_two"] ** 0.5 + group["eps"]))
+                p.data = p.data - (alpha * group["weight_decay"] * p.data)
 
                 # Add weight decay after the main gradient-based updates.
                 # Please note that the learning rate should be incorporated into this update.
