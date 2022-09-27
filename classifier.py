@@ -189,6 +189,7 @@ def train(args):
         model.train()
         train_loss = 0
         num_batches = 0
+        print(epoch)
         for step, batch in enumerate(tqdm(train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE)):
             b_ids, b_type_ids, b_mask, b_labels, b_sents = batch['token_ids'], batch['token_type_ids'], batch[
                 'attention_mask'], batch['labels'], batch['sents']
